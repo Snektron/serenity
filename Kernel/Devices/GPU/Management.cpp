@@ -13,6 +13,7 @@
 #include <Kernel/Boot/Multiboot.h>
 #include <Kernel/Bus/PCI/API.h>
 #include <Kernel/Bus/PCI/IDs.h>
+#include <Kernel/Devices/GPU/AMD/NativeGraphicsAdapter.h>
 #include <Kernel/Devices/GPU/Bochs/GraphicsAdapter.h>
 #include <Kernel/Devices/GPU/Console/BootFramebufferConsole.h>
 #include <Kernel/Devices/GPU/Intel/NativeGraphicsAdapter.h>
@@ -126,6 +127,7 @@ struct PCIGraphicsDriverInitializer {
 };
 
 static constexpr PCIGraphicsDriverInitializer s_initializers[] = {
+    { AMDNativeGraphicsAdapter::probe, AMDNativeGraphicsAdapter::create },
     { IntelNativeGraphicsAdapter::probe, IntelNativeGraphicsAdapter::create },
     { BochsGraphicsAdapter::probe, BochsGraphicsAdapter::create },
     { VirtIOGraphicsAdapter::probe, VirtIOGraphicsAdapter::create },

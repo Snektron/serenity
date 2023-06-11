@@ -15,6 +15,10 @@
 #cmakedefine01 AHCI_DEBUG
 #endif
 
+#ifndef AMD_GRAPHICS_DEBUG
+#cmakedefine01 AMD_GRAPHICS_DEBUG
+#endif
+
 #ifndef ACPI_DEBUG
 #cmakedefine01 ACPI_DEBUG
 #endif
