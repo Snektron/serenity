@@ -7,9 +7,11 @@
 #pragma once
 
 #include <AK/Error.h>
+#include <AK/OwnPtr.h>
+#include <AK/Span.h>
 #include <AK/Types.h>
 #include <Kernel/Library/KBuffer.h>
-#include <Kernel/Library/StdLib.h>
+#include <Kernel/Library/KString.h>
 
 namespace Kernel {
 
@@ -24,14 +26,19 @@ class AtomBios final {
 public:
     struct [[gnu::packed]] ROM {
         u16 magic;
-        u8 reserved[46];
+        u8 reserved[45];
+        u8 number_of_strings;
         u8 ati_magic[10];
         u8 reserved2[14];
         u16 rom_table_offset;
+        u8 reserved3[36];
+        u16 vbios_name_offset;
     };
+    static_assert(offsetof(ROM, number_of_strings) == 0x2F);
     static_assert(offsetof(ROM, ati_magic) == 0x30);
     static_assert(offsetof(ROM, rom_table_offset) == 0x48);
-    static_assert(sizeof(ROM) == 0x4A);
+    static_assert(offsetof(ROM, vbios_name_offset) == 0x6E);
+    static_assert(sizeof(ROM) == 0x70);
 
     struct [[gnu::packed]] TableHeader {
         u16 structure_size;
@@ -67,13 +74,28 @@ public:
         u16 commands[];
     };
 
-    static ErrorOr<AtomBios> try_create(AMDNativeGraphicsAdapter& adapter);
+    struct [[gnu::packed]] DataTable {
+        TableHeader header;
+    };
+
+    static ErrorOr<NonnullOwnPtr<AtomBios>> try_create(AMDNativeGraphicsAdapter& adapter);
+
+    ErrorOr<NonnullOwnPtr<KString>> name() const;
 
 private:
     explicit AtomBios(NonnullOwnPtr<KBuffer>&& bios);
 
-    static ErrorOr<AtomBios> try_create_from_kbuffer(NonnullOwnPtr<KBuffer>&& bios_buffer);
-    static ErrorOr<AtomBios> try_create_from_expansion_rom(AMDNativeGraphicsAdapter& adapter);
+    static ErrorOr<NonnullOwnPtr<AtomBios>> try_create_from_kbuffer(NonnullOwnPtr<KBuffer>&& bios_buffer);
+    static ErrorOr<NonnullOwnPtr<AtomBios>> try_create_from_expansion_rom(AMDNativeGraphicsAdapter& adapter);
+
+    template<typename T>
+    ErrorOr<T const*> read_from_bios(u16 offset) const
+    {
+        auto const bios = this->m_bios->bytes();
+        if (offset + sizeof(T) > bios.size())
+            return Error::from_errno(EIO);
+        return reinterpret_cast<T const*>(bios.data() + offset);
+    }
 
     bool is_valid() const;
 

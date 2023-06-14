@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <AK/OwnPtr.h>
 #include <AK/Types.h>
 #include <Kernel/Bus/PCI/Device.h>
 #include <Kernel/Devices/GPU/GenericGraphicsAdapter.h>
@@ -13,6 +14,12 @@
 #include <Kernel/Memory/TypedMapping.h>
 
 namespace Kernel {
+
+namespace Graphics::AMD {
+
+class AtomBios;
+
+};
 
 class AMDNativeGraphicsAdapter final
     : public GenericGraphicsAdapter
@@ -40,5 +47,7 @@ private:
 
     Spinlock<LockRank::None> m_mmio_register_lock;
     Memory::TypedMapping<u32 volatile> m_mmio_registers;
+
+    OwnPtr<Graphics::AMD::AtomBios> m_bios;
 };
 }
