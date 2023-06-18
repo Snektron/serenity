@@ -71,7 +71,8 @@ set(KERNEL_SOURCES
     Devices/Generic/RandomDevice.cpp
     Devices/Generic/SelfTTYDevice.cpp
     Devices/Generic/ZeroDevice.cpp
-    Devices/GPU/AMD/AtomBios.cpp
+    Devices/GPU/AMD/Atom/Bios.cpp
+    Devices/GPU/AMD/Atom/Interpreter.cpp
     Devices/GPU/AMD/NativeGraphicsAdapter.cpp
     Devices/GPU/Bochs/GraphicsAdapter.cpp
     Devices/GPU/Bochs/QEMUDisplayConnector.cpp

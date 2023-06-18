@@ -4,10 +4,13 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <Kernel/Library/Panic.h>
+
 #include <Kernel/Bus/PCI/API.h>
 #include <Kernel/Bus/PCI/IDs.h>
 #include <Kernel/Devices/GPU/AMD/Arch/VI/Registers.h>
-#include <Kernel/Devices/GPU/AMD/AtomBios.h>
+#include <Kernel/Devices/GPU/AMD/Atom/Bios.h>
+#include <Kernel/Devices/GPU/AMD/Atom/Interpreter.h>
 #include <Kernel/Devices/GPU/AMD/NativeGraphicsAdapter.h>
 #include <Kernel/Memory/PhysicalAddress.h>
 
@@ -61,15 +64,17 @@ ErrorOr<void> AMDNativeGraphicsAdapter::initialize()
     dmesgln_pci(*this, "MMIO @ {}, space size is 0x{:x} bytes", mmio_addr, mmio_size);
 
     m_mmio_registers = TRY(Memory::map_typed<u32 volatile>(mmio_addr, mmio_size, Memory::Region::Access::ReadWrite));
-    m_bios = TRY(Graphics::AMD::AtomBios::try_create(*this));
+    m_bios = TRY(Graphics::AMD::Atom::Bios::try_create(*this));
 
     auto const name = TRY(m_bios->name());
     dmesgln_pci(*this, "VBIOS is {}", name);
 
+    TRY(m_bios->asic_init(*this));
+
     return Error::from_errno(ENODEV);
 }
 
-void AMDNativeGraphicsAdapter::write_register(u16 reg, u32 data)
+void AMDNativeGraphicsAdapter::write_register(u32 reg, u32 data)
 {
     auto const mmio = m_mmio_registers.ptr();
     if (reg * sizeof(u32) < m_mmio_registers.length) {
@@ -86,11 +91,12 @@ void AMDNativeGraphicsAdapter::write_register(u16 reg, u32 data)
     }
 }
 
-u32 AMDNativeGraphicsAdapter::read_register(u16 reg)
+u32 AMDNativeGraphicsAdapter::read_register(u32 reg)
 {
     auto const mmio = m_mmio_registers.ptr();
+    u32 data;
     if (reg * sizeof(u32) < m_mmio_registers.length) {
-        return mmio[reg];
+        data = mmio[reg];
     } else {
         // Outside the mapped range, write via PCIe
         // TODO: Abstract this to architecture-specific read function
@@ -98,8 +104,9 @@ u32 AMDNativeGraphicsAdapter::read_register(u16 reg)
         SpinlockLocker locker(m_mmio_register_lock);
         mmio[to_underlying(Graphics::AMD::VI::Registers::PCIEIndex)] = reg * sizeof(u32);
         (void)mmio[to_underlying(Graphics::AMD::VI::Registers::PCIEIndex)];
-        return mmio[to_underlying(Graphics::AMD::VI::Registers::PCIEData)];
+        data = mmio[to_underlying(Graphics::AMD::VI::Registers::PCIEData)];
     }
+    return data;
 }
 
 }
