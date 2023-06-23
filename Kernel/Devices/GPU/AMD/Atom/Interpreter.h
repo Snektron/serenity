@@ -4,10 +4,13 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <AK/Types.h>
+#pragma once
+
+#include <AK/Error.h>
 #include <AK/Span.h>
-#include <Kernel/Devices/GPU/AMD/Atom/Definitions.h>
 #include <AK/StringBuilder.h>
+#include <AK/Types.h>
+#include <Kernel/Devices/GPU/AMD/Atom/Definitions.h>
 
 namespace Kernel {
 
@@ -89,7 +92,7 @@ private:
 
     static ErrorOr<void> execute_recursive(Context& ctx, AMDNativeGraphicsAdapter& gpu, Command cmd, Span<u32> parameters, u16 debug_depth);
 
-    explicit Interpreter(Context& ctx, AMDNativeGraphicsAdapter& gpu, Command cmd, CommandDescriptor const* cmd_desc, Span<u32> ps, Span<u32> ws, u16 debug_depth);
+    explicit Interpreter(Context& ctx, AMDNativeGraphicsAdapter& gpu, CommandDescriptor cmd_desc, Span<u32> ps, Span<u32> ws, u16 debug_depth);
 
     ErrorOr<u32> execute_iio(u32 program, u32 index, u32 data);
 
@@ -103,20 +106,19 @@ private:
     Operand read_dst_skip(Location loc, u8 attr);
     Operand read_src(u8 attr);
     u32 read_immediate(AddressMode mode);
-    void write_dst(const Operand& op, u32 value);
+    void write_dst(Operand const& op, u32 value);
 
     void flush_trace();
 
     AMDNativeGraphicsAdapter& m_gpu;
     Context& m_ctx;
-    Command m_cmd;
-    CommandDescriptor const* m_cmd_desc;
+    CommandDescriptor m_cmd_desc;
 
     Span<u32> m_parameter_space;
     Span<u32> m_workspace;
-    u16 m_debug_depth;
-    u16 m_pc { 0 };
+    u16 m_pc { sizeof(CommandTableEntry) };
     u16 reg_block { 0 };
+    u16 m_debug_depth;
     StringBuilder m_trace;
 };
 

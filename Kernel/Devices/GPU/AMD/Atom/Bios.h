@@ -6,14 +6,15 @@
 
 #pragma once
 
+#include <AK/Array.h>
 #include <AK/Error.h>
 #include <AK/OwnPtr.h>
 #include <AK/Span.h>
 #include <AK/Types.h>
-#include <AK/Array.h>
+#include <Kernel/Devices/GPU/AMD/Atom/Definitions.h>
+#include <Kernel/Devices/GPU/AMD/Atom/Interpreter.h>
 #include <Kernel/Library/KBuffer.h>
 #include <Kernel/Library/KString.h>
-#include <Kernel/Devices/GPU/AMD/Atom/Definitions.h>
 
 namespace Kernel {
 
@@ -31,14 +32,14 @@ public:
     ErrorOr<NonnullOwnPtr<KString>> name() const;
 
     u16 datatable(u16 index) const;
-    u16 command(Command cmd) const;
 
-    ErrorOr<CommandDescriptor const*> command_descriptor(Command cmd) const;
+    ErrorOr<CommandDescriptor> command(Command cmd) const;
 
-    u8 read_byte_at(u32 offset) const;
-    u32 read_dword_at(u32 offset) const;
+    u8 read8(u16 offset) const;
+    u16 read16(u16 offset) const;
+    u32 read32(u16 offset) const;
 
-    u16 iio_program(u16 program) const { return m_iio[program]; }
+    u16 iio_program(u16 index) const { return m_iio[index]; }
 
     ErrorOr<void> invoke(AMDNativeGraphicsAdapter& gpu, Command cmd, Span<u32> parameters) const;
 
@@ -50,16 +51,24 @@ private:
     static ErrorOr<NonnullOwnPtr<Bios>> try_create_from_kbuffer(NonnullOwnPtr<KBuffer>&& bios_buffer);
     static ErrorOr<NonnullOwnPtr<Bios>> try_create_from_expansion_rom(AMDNativeGraphicsAdapter& adapter);
 
-    template <typename T>
-    ErrorOr<T const*> read_from_bios(u16 offset) const
+    template<typename T>
+    ErrorOr<T const*> try_read_from_bios(u16 offset) const
     {
         auto const bios = this->m_bios->bytes();
         if (offset + sizeof(T) > bios.size())
             return Error::from_errno(EIO);
-        return reinterpret_cast<T const*>(bios.data() + offset);
+        return must_read_from_bios<T>(offset);
     }
 
-    template <typename T>
+    template<typename T>
+    T const* must_read_from_bios(u16 offset) const
+    {
+        static_assert(alignof(T) == 1);
+        auto const bios = this->m_bios->bytes();
+        return reinterpret_cast<T const*>(bios.slice(offset, sizeof(T)).data());
+    }
+
+    template<typename T>
     static Span<u32> to_parameter_space(T& t)
     {
         u32* ptr = reinterpret_cast<u32*>(&t);
@@ -67,10 +76,11 @@ private:
     }
 
     bool is_valid() const;
+    ErrorOr<void> index_iio();
 
     Spinlock<LockRank::None> m_execution_lock;
     NonnullOwnPtr<KBuffer> m_bios;
-    Array<u16, IIOMaxPrograms> m_iio;
+    Array<u16, MaxIIOPrograms> m_iio;
 };
 
 }
