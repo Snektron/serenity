@@ -18,12 +18,14 @@ namespace Kernel {
 namespace Graphics::AMD::Atom {
 
 class Bios;
+class Interpreter;
 
 };
 
 class AMDNativeGraphicsAdapter final
     : public GenericGraphicsAdapter
     , public PCI::Device {
+    friend class Graphics::AMD::Atom::Interpreter;
 
 public:
     static ErrorOr<bool> probe(PCI::DeviceIdentifier const&);
@@ -50,6 +52,7 @@ private:
     Spinlock<LockRank::None> m_mmio_register_lock;
     Memory::TypedMapping<u32 volatile> m_mmio_registers;
 
+    bool m_bios_debug;
     OwnPtr<Graphics::AMD::Atom::Bios> m_bios;
 };
 }

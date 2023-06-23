@@ -6,6 +6,7 @@
 
 #include <Kernel/Library/Panic.h>
 
+#include <Kernel/Boot/CommandLine.h>
 #include <Kernel/Bus/PCI/API.h>
 #include <Kernel/Bus/PCI/IDs.h>
 #include <Kernel/Devices/GPU/AMD/Arch/VI/Registers.h>
@@ -64,6 +65,8 @@ ErrorOr<void> AMDNativeGraphicsAdapter::initialize()
     dmesgln_pci(*this, "MMIO @ {}, space size is 0x{:x} bytes", mmio_addr, mmio_size);
 
     m_mmio_registers = TRY(Memory::map_typed<u32 volatile>(mmio_addr, mmio_size, Memory::Region::Access::ReadWrite));
+
+    m_bios_debug = kernel_command_line().enable_atombios_debug();
 
     m_bios = TRY(Graphics::AMD::Atom::Bios::try_create(*this));
     m_bios->dump_version(*this);

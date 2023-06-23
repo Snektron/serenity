@@ -317,4 +317,10 @@ UNMAP_AFTER_INIT size_t CommandLine::switch_to_tty() const
     }
     PANIC("Invalid default tty value: {}", default_tty);
 }
+
+UNMAP_AFTER_INIT bool CommandLine::enable_atombios_debug() const
+{
+    return contains("enable_atombios_debug"sv);
+}
+
 }

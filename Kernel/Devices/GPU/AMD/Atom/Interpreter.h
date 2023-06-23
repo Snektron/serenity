@@ -10,6 +10,7 @@
 #include <AK/Span.h>
 #include <AK/StringBuilder.h>
 #include <AK/Types.h>
+#include <Kernel/Boot/CommandLine.h>
 #include <Kernel/Devices/GPU/AMD/Atom/Definitions.h>
 
 namespace Kernel {
@@ -108,7 +109,17 @@ private:
     u32 read_immediate(AddressMode mode);
     void write_dst(Operand const& op, u32 value);
 
+    template<typename... Parameters>
+    void traceff(CheckedFormatString<Parameters...>&& fmt, Parameters const&... parameters)
+    {
+        if (trace_enabled()) {
+            m_trace.appendff(forward<CheckedFormatString<Parameters...>>(fmt), parameters...);
+        }
+    }
+
+    void trace(StringView msg);
     void flush_trace();
+    bool trace_enabled() const;
 
     AMDNativeGraphicsAdapter& m_gpu;
     Context& m_ctx;

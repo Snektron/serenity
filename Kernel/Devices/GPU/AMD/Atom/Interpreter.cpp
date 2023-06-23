@@ -261,7 +261,7 @@ ErrorOr<void> Interpreter::execute_recursive(Context& ctx, AMDNativeGraphicsAdap
     auto work_space = TRY(FixedArray<u32>::create(desc.work_space_size / sizeof(u32)));
     auto interp = Interpreter(ctx, gpu, desc, parameters, work_space.span(), debug_depth);
 
-    interp.m_trace.appendff("--- Executing command {:04x} @ {:04x} (len={:04x}, ps={:02x}, ws={:02x})", to_underlying(cmd), desc.base, desc.size, desc.parameter_space_size, desc.work_space_size);
+    interp.traceff("--- Executing command {:04x} @ {:04x} (len={:04x}, ps={:02x}, ws={:02x})", to_underlying(cmd), desc.base, desc.size, desc.parameter_space_size, desc.work_space_size);
     interp.flush_trace();
 
     VERIFY(parameters.size() * sizeof(u32) >= desc.parameter_space_size);
@@ -292,37 +292,29 @@ ErrorOr<u32> Interpreter::execute_iio(u32 program, u32 index, u32 data)
         return iio8() | (iio8() << 8);
     };
 
-    dbgln("IIO: executing at {:04x}", iio_pc);
-
     u32 temp = 0xCDCDCDCD;
     while (true) {
         u8 const op = iio8();
         switch (static_cast<IndirectIO>(op)) {
         case IndirectIO::Nop:
-            dbgln("IIO: nop");
             break;
         case IndirectIO::Read: {
             u16 index = iio16();
             temp = m_gpu.read_register(index);
-            dbgln("IIO: read {:04x} => {:08x}", index, temp);
             break;
         }
         case IndirectIO::Write: {
             u16 index = iio16();
-            dbgln("IIO: write {:04x} <= {:08x}", index, temp);
             m_gpu.write_register(index, temp);
             break;
         }
         case IndirectIO::Clear:
-            dbgln("IIO: clear");
             temp &= ~((0xFFFFFFFF >> (32 - iio8())) << iio8());
             break;
         case IndirectIO::Set:
-            dbgln("IIO: set");
             temp |= ((0xFFFFFFFF >> (32 - iio8())) << iio8());
             break;
         case IndirectIO::MoveIndex: {
-            dbgln("IIO: moveindex");
             u8 a = iio8();
             u8 b = iio8();
             u8 c = iio8();
@@ -331,7 +323,6 @@ ErrorOr<u32> Interpreter::execute_iio(u32 program, u32 index, u32 data)
             break;
         }
         case IndirectIO::MoveData: {
-            dbgln("IIO: movedata");
             u8 a = iio8();
             u8 b = iio8();
             u8 c = iio8();
@@ -340,7 +331,6 @@ ErrorOr<u32> Interpreter::execute_iio(u32 program, u32 index, u32 data)
             break;
         }
         case IndirectIO::MoveAttr: {
-            dbgln("IIO: moveattr");
             u8 a = iio8();
             u8 b = iio8();
             u8 c = iio8();
@@ -349,7 +339,6 @@ ErrorOr<u32> Interpreter::execute_iio(u32 program, u32 index, u32 data)
             break;
         }
         case IndirectIO::End:
-            dbgln("IIO: end");
             return temp;
         case IndirectIO::Start:
         default:
@@ -365,7 +354,7 @@ ErrorOr<bool> Interpreter::next()
     auto const inst = read8();
     auto const desc = instruction_table[inst < instruction_table.size() ? inst : 0];
 
-    m_trace.appendff("{:04x}+{:04x}: {: <12}", m_cmd_desc.base, start_pc, opcode_name_table[to_underlying(desc.opcode)]);
+    traceff("{:04x}+{:04x}: {: <12}", m_cmd_desc.base, start_pc, opcode_name_table[to_underlying(desc.opcode)]);
 
     switch (desc.opcode) {
     case OpCode::Invalid:
@@ -402,7 +391,7 @@ ErrorOr<bool> Interpreter::next()
         attr |= def_dst[attr >> 3] << 6;
         auto const dst = read_dst(desc.operand.dst_loc, attr);
         auto const shift = read_immediate(AddressMode::Byte0);
-        m_trace.appendff(" shift:{:02x}", shift);
+        traceff(" shift:{:02x}", shift);
         write_dst(dst, dst.value() << shift);
         break;
     }
@@ -412,7 +401,7 @@ ErrorOr<bool> Interpreter::next()
         attr |= def_dst[attr >> 3] << 6;
         auto const dst = read_dst(desc.operand.dst_loc, attr);
         auto const shift = read_immediate(AddressMode::Byte0);
-        m_trace.appendff(" shift:{:02x}", shift);
+        traceff(" shift:{:02x}", shift);
         write_dst(dst, dst.value() >> shift);
         break;
     }
@@ -421,7 +410,7 @@ ErrorOr<bool> Interpreter::next()
         auto const dst = read_dst(desc.operand.dst_loc, attr);
         auto const src = read_src(attr);
         m_ctx.divmul[0] = dst.value() * src.value();
-        m_trace.appendff(" => {:08x}", m_ctx.divmul[0]);
+        traceff(" => {:08x}", m_ctx.divmul[0]);
         break;
     }
     case OpCode::Div: {
@@ -435,7 +424,7 @@ ErrorOr<bool> Interpreter::next()
             m_ctx.divmul[0] = 0;
             m_ctx.divmul[1] = 0;
         }
-        m_trace.appendff(" => {:08x} {:08x}", m_ctx.divmul[0], m_ctx.divmul[1]);
+        traceff(" => {:08x} {:08x}", m_ctx.divmul[0], m_ctx.divmul[1]);
         break;
     }
     case OpCode::Add: {
@@ -458,14 +447,14 @@ ErrorOr<bool> Interpreter::next()
             u16 port = read16();
             if (port == 0) {
                 m_ctx.io_mode = IOMode::MemoryMapped;
-                m_trace.append(" mm"sv);
+                trace(" mm"sv);
             } else {
                 m_ctx.io_mode = IOMode::IIO;
                 m_ctx.iio_program = port;
                 if (port < io_name_table.size()) {
-                    m_trace.appendff(" iio:{}", io_name_table[port]);
+                    traceff(" iio:{}", io_name_table[port]);
                 } else {
-                    m_trace.appendff(" iio:{:02x}", port);
+                    traceff(" iio:{:02x}", port);
                 }
             }
             break;
@@ -473,19 +462,19 @@ ErrorOr<bool> Interpreter::next()
         case Port::PCI:
             (void)read8();
             m_ctx.io_mode = IOMode::PCI;
-            m_trace.append(" pci"sv);
+            trace(" pci"sv);
             break;
         case Port::SysIO:
             (void)read8();
             m_ctx.io_mode = IOMode::SysIO;
-            m_trace.append(" sysio"sv);
+            trace(" sysio"sv);
             break;
         }
         break;
     }
     case OpCode::SetRegBlock: {
         m_ctx.reg_block = read16();
-        m_trace.appendff(" block:{:04x}", m_ctx.reg_block);
+        traceff(" block:{:04x}", m_ctx.reg_block);
         break;
     }
     case OpCode::SetFBBase: {
@@ -499,7 +488,7 @@ ErrorOr<bool> Interpreter::next()
         auto const src = read_src(attr);
         m_ctx.comp_above = dst.value() > src.value();
         m_ctx.comp_equal = dst.value() == src.value();
-        m_trace.appendff(" => {} {}", m_ctx.comp_above ? "above" : "below", m_ctx.comp_equal ? "equal" : "notequal");
+        traceff(" => {} {}", m_ctx.comp_above ? "above" : "below", m_ctx.comp_equal ? "equal" : "notequal");
         break;
     }
     case OpCode::Switch: {
@@ -513,9 +502,9 @@ ErrorOr<bool> Interpreter::next()
             case CaseMagic: {
                 auto const cond = read_immediate(src.address_mode);
                 u16 const target = read16();
-                m_trace.appendff("  case:{:08x} target:{:04x}", cond, target);
+                traceff("  case:{:08x} target:{:04x}", cond, target);
                 if (cond == src.value()) {
-                    m_trace.appendff(" => taken");
+                    traceff(" => taken");
                     flush_trace();
                     m_pc = target;
                     stop = true;
@@ -542,7 +531,7 @@ ErrorOr<bool> Interpreter::next()
     case OpCode::Jump: {
         u16 target = read16();
         bool take = false;
-        m_trace.appendff(" {} {:04x}", cond_name_table[to_underlying(desc.operand.cond)], target);
+        traceff(" {} {:04x}", cond_name_table[to_underlying(desc.operand.cond)], target);
         switch (desc.operand.cond) {
         case Condition::Above:
             take = m_ctx.comp_above;
@@ -567,7 +556,7 @@ ErrorOr<bool> Interpreter::next()
             break;
         }
 
-        m_trace.appendff(" => {}", take ? "taken" : "not taken");
+        traceff(" => {}", take ? "taken" : "not taken");
         // TODO: Deadlock detection?
         // NOTE: The jump target is here INCLUDING the command descriptor, but
         // m_pc does not include that.
@@ -580,7 +569,7 @@ ErrorOr<bool> Interpreter::next()
         auto const dst = read_dst(desc.operand.dst_loc, attr);
         auto const src = read_src(attr);
         m_ctx.comp_equal = (dst.value() & src.value()) == 0;
-        m_trace.appendff(" => {}", m_ctx.comp_equal ? "equal" : "notequal");
+        traceff(" => {}", m_ctx.comp_equal ? "equal" : "notequal");
         break;
     }
     case OpCode::Delay: {
@@ -588,11 +577,11 @@ ErrorOr<bool> Interpreter::next()
         Thread::BlockResult block_result(Thread::BlockResult::WokeNormally);
         switch (desc.operand.unit) {
         case Unit::MicroSecond:
-            m_trace.appendff(" {}us", count);
+            traceff(" {}us", count);
             block_result = Thread::current()->sleep(Duration::from_microseconds(count));
             break;
         case Unit::MilliSecond:
-            m_trace.appendff(" {}ms", count);
+            traceff(" {}ms", count);
             block_result = Thread::current()->sleep(Duration::from_milliseconds(count));
             break;
         }
@@ -607,7 +596,7 @@ ErrorOr<bool> Interpreter::next()
         auto const index = read8();
         auto const cmd = static_cast<Command>(index); // TODO: Is this cast valid? Because its an enum class?
         auto const ps = m_parameter_space.slice(m_cmd_desc.parameter_space_size / sizeof(u32));
-        m_trace.appendff(" {:02x}", index);
+        traceff(" {:02x}", index);
         flush_trace();
         TRY(execute_recursive(m_ctx, m_gpu, cmd, ps, m_debug_depth + 1));
         break;
@@ -629,13 +618,13 @@ ErrorOr<bool> Interpreter::next()
         u8 attr = read8();
         auto const dst = read_dst(desc.operand.dst_loc, attr);
         auto const mask = read_immediate(static_cast<AddressMode>((attr >> 3 & 0x7)));
-        m_trace.appendff(" mask:{:08x}", mask);
+        traceff(" mask:{:08x}", mask);
         auto const src = read_src(attr);
         write_dst(dst, (dst.value() & mask) | src.value());
         break;
     }
     case OpCode::PostCard: {
-        m_trace.appendff("=> {:02x}", read8());
+        traceff("=> {:02x}", read8());
         break;
     }
     case OpCode::Beep: {
@@ -644,7 +633,7 @@ ErrorOr<bool> Interpreter::next()
     }
     case OpCode::SetDataBlock: {
         u8 index = read8();
-        m_trace.appendff(" block:{:02x}", index);
+        traceff(" block:{:02x}", index);
         switch (index) {
         case 0:
             m_ctx.data_block = 0;
@@ -656,7 +645,7 @@ ErrorOr<bool> Interpreter::next()
             m_ctx.data_block = m_gpu.bios().datatable(index);
             break;
         }
-        m_trace.appendff(" base:{:02x}", m_ctx.data_block);
+        traceff(" base:{:02x}", m_ctx.data_block);
         break;
     }
     case OpCode::Xor: {
@@ -691,10 +680,10 @@ ErrorOr<bool> Interpreter::next()
         break;
     }
     case OpCode::Debug:
-        m_trace.appendff(" => {:02x}", read8());
+        traceff(" => {:02x}", read8());
         break;
     case OpCode::ProcessDS:
-        m_trace.appendff(" => {:04x}", read16());
+        traceff(" => {:04x}", read16());
         break;
     case OpCode::Mul32: {
         u8 attr = read8();
@@ -703,7 +692,7 @@ ErrorOr<bool> Interpreter::next()
         u64 result = static_cast<u64>(dst.value()) * static_cast<u64>(src.value());
         m_ctx.divmul[0] = result & 0xFFFFFFFF;
         m_ctx.divmul[1] = result >> 32;
-        m_trace.appendff(" => {:08x} {:08x}", m_ctx.divmul[1], m_ctx.divmul[0]);
+        traceff(" => {:08x} {:08x}", m_ctx.divmul[1], m_ctx.divmul[0]);
         break;
     }
     case OpCode::Div32: {
@@ -719,7 +708,7 @@ ErrorOr<bool> Interpreter::next()
             m_ctx.divmul[0] = 0;
             m_ctx.divmul[1] = 0;
         }
-        m_trace.appendff(" => {:08x} {:08x}", m_ctx.divmul[1], m_ctx.divmul[0]);
+        traceff(" => {:08x} {:08x}", m_ctx.divmul[1], m_ctx.divmul[0]);
         break;
     }
     // Linux does not implement the following opcodes, so they must not be used...
@@ -769,82 +758,82 @@ Operand Interpreter::read_dst_skip(Location dst_loc, u8 attr)
     switch (loc) {
     case Location::Register: {
         u32 index = read16() + m_ctx.reg_block;
-        m_trace.appendff(" reg[{:04x}]", index);
+        traceff(" reg[{:04x}]", index);
         break;
     }
     case Location::ParameterSpace: {
         u8 index = read8();
-        m_trace.appendff(" ps[{:02x}]", index);
+        traceff(" ps[{:02x}]", index);
         break;
     }
     case Location::WorkSpace: {
         u8 index = read8();
         switch (static_cast<WorkSpace>(index)) {
         case WorkSpace::Quotient:
-            m_trace.append(" ws[quotient]"sv);
+            trace(" ws[quotient]"sv);
             break;
         case WorkSpace::Remainder:
-            m_trace.append(" ws[remainder]"sv);
+            trace(" ws[remainder]"sv);
             break;
         case WorkSpace::DataPtr:
-            m_trace.append(" ws[dataptr]"sv);
+            trace(" ws[dataptr]"sv);
             break;
         case WorkSpace::Shift:
-            m_trace.append(" ws[dataptr]"sv);
+            trace(" ws[dataptr]"sv);
             break;
         case WorkSpace::OrMask:
-            m_trace.append(" ws[ormask]"sv);
+            trace(" ws[ormask]"sv);
             break;
         case WorkSpace::AndMask:
-            m_trace.append(" ws[andmask]"sv);
+            trace(" ws[andmask]"sv);
             break;
         case WorkSpace::FBWindow:
-            m_trace.append(" ws[fbwindow]"sv);
+            trace(" ws[fbwindow]"sv);
             break;
         case WorkSpace::Attributes:
-            m_trace.append(" ws[attributes]"sv);
+            trace(" ws[attributes]"sv);
             break;
         case WorkSpace::RegPtr:
-            m_trace.append(" ws[regptr]"sv);
+            trace(" ws[regptr]"sv);
             break;
         default:
-            m_trace.appendff(" ws[{:02x}]", index);
+            traceff(" ws[{:02x}]", index);
             break;
         }
         break;
     }
     case Location::ID: {
         u16 index = read16();
-        m_trace.appendff(" id[{:04x}]", index);
+        traceff(" id[{:04x}]", index);
         break;
     }
     case Location::FrameBuffer: {
         u8 index = read8();
-        m_trace.appendff(" fb[{:02x}]", index);
+        traceff(" fb[{:02x}]", index);
         break;
     }
     case Location::Immediate: {
         u32 value = read_immediate(address_mode);
-        m_trace.appendff(" imm:[{:08x}]", value);
+        traceff(" imm:[{:08x}]", value);
         VERIFY_NOT_REACHED();
         break;
     }
     case Location::PhaseLockedLoop: {
         u8 index = read8();
-        m_trace.appendff(" pll[{:02x}]", index);
+        traceff(" pll[{:02x}]", index);
         // TODO: Error?
         VERIFY_NOT_REACHED();
         break;
     }
     case Location::MemController: {
         u8 index = read8();
-        m_trace.appendff(" mc[{:02x}]", index);
+        traceff(" mc[{:02x}]", index);
         // TODO: Error?
         VERIFY_NOT_REACHED();
         break;
     }
     }
-    m_trace.append("[        ]"sv);
+    trace("[        ]"sv);
 
     return Operand { value, loc, address_mode, pc };
 }
@@ -858,7 +847,7 @@ Operand Interpreter::read_src(u8 attr)
     switch (loc) {
     case Location::Register: {
         u32 index = read16() + m_ctx.reg_block;
-        m_trace.appendff(" reg[{:04x}]", index);
+        traceff(" reg[{:04x}]", index);
         switch (m_ctx.io_mode) {
         case IOMode::MemoryMapped:
             value = m_gpu.read_register(index);
@@ -879,7 +868,7 @@ Operand Interpreter::read_src(u8 attr)
     }
     case Location::ParameterSpace: {
         u8 index = read8();
-        m_trace.appendff(" ps[{:02x}]", index);
+        traceff(" ps[{:02x}]", index);
         // TODO: Linux notes that this access may be unaligned. Why?
         value = m_parameter_space[index];
         break;
@@ -888,43 +877,43 @@ Operand Interpreter::read_src(u8 attr)
         u8 index = read8();
         switch (static_cast<WorkSpace>(index)) {
         case WorkSpace::Quotient:
-            m_trace.append(" ws[quotient]"sv);
+            trace(" ws[quotient]"sv);
             value = m_ctx.divmul[0];
             break;
         case WorkSpace::Remainder:
-            m_trace.append(" ws[remainder]"sv);
+            trace(" ws[remainder]"sv);
             value = m_ctx.divmul[1];
             break;
         case WorkSpace::DataPtr:
-            m_trace.append(" ws[dataptr]"sv);
+            trace(" ws[dataptr]"sv);
             value = m_ctx.data_block;
             break;
         case WorkSpace::Shift:
-            m_trace.append(" ws[dataptr]"sv);
+            trace(" ws[dataptr]"sv);
             value = m_ctx.shift;
             break;
         case WorkSpace::OrMask:
-            m_trace.append(" ws[ormask]"sv);
+            trace(" ws[ormask]"sv);
             value = 1 << m_ctx.shift;
             break;
         case WorkSpace::AndMask:
-            m_trace.append(" ws[andmask]"sv);
+            trace(" ws[andmask]"sv);
             value = ~(1 << m_ctx.shift);
             break;
         case WorkSpace::FBWindow:
-            m_trace.append(" ws[fbwindow]"sv);
+            trace(" ws[fbwindow]"sv);
             value = m_ctx.fb_base;
             break;
         case WorkSpace::Attributes:
-            m_trace.append(" ws[attributes]"sv);
+            trace(" ws[attributes]"sv);
             value = m_ctx.io_attr;
             break;
         case WorkSpace::RegPtr:
-            m_trace.append(" ws[regptr]"sv);
+            trace(" ws[regptr]"sv);
             value = m_ctx.reg_block;
             break;
         default:
-            m_trace.appendff(" ws[{:02x}]", index);
+            traceff(" ws[{:02x}]", index);
             value = m_workspace[index];
             break;
         }
@@ -932,25 +921,25 @@ Operand Interpreter::read_src(u8 attr)
     }
     case Location::ID: {
         u16 index = read16();
-        m_trace.appendff(" id[{:04x}]", index);
+        traceff(" id[{:04x}]", index);
         value = m_gpu.bios().read32(index + m_ctx.data_block);
         break;
     }
     case Location::FrameBuffer: {
         u8 index = read8();
-        m_trace.appendff(" fb[{:02x}]", index);
+        traceff(" fb[{:02x}]", index);
         // TODO: Implement
         dbgln("todo: framebuffer read");
         break;
     }
     case Location::Immediate: {
         value = read_immediate(address_mode);
-        m_trace.append(" imm:"sv);
+        trace(" imm:"sv);
         break;
     }
     case Location::PhaseLockedLoop: {
         u8 index = read8();
-        m_trace.appendff(" pll[{:02x}]", index);
+        traceff(" pll[{:02x}]", index);
         dmesgln_pci(m_gpu, "Atom: reading from unimplemented pll");
         // TODO: Error?
         VERIFY_NOT_REACHED();
@@ -958,7 +947,7 @@ Operand Interpreter::read_src(u8 attr)
     }
     case Location::MemController: {
         u8 index = read8();
-        m_trace.appendff(" mc[{:02x}]", index);
+        traceff(" mc[{:02x}]", index);
         dmesgln_pci(m_gpu, "Atom: reading from unimplemented mc");
         // TODO: Error?
         VERIFY_NOT_REACHED();
@@ -969,28 +958,28 @@ Operand Interpreter::read_src(u8 attr)
     auto const op = Operand { value, loc, address_mode, pc };
     switch (address_mode) {
     case AddressMode::DWord:
-        m_trace.appendff("[{:08x}]", op.value());
+        traceff("[{:08x}]", op.value());
         break;
     case AddressMode::Word0:
-        m_trace.appendff("[    {:04x}]", op.value());
+        traceff("[    {:04x}]", op.value());
         break;
     case AddressMode::Word8:
-        m_trace.appendff("[  {:04x}  ]", op.value());
+        traceff("[  {:04x}  ]", op.value());
         break;
     case AddressMode::Word16:
-        m_trace.appendff("[{:04x}    ]", op.value());
+        traceff("[{:04x}    ]", op.value());
         break;
     case AddressMode::Byte0:
-        m_trace.appendff("[      {:02x}]", op.value());
+        traceff("[      {:02x}]", op.value());
         break;
     case AddressMode::Byte8:
-        m_trace.appendff("[    {:02x}  ]", op.value());
+        traceff("[    {:02x}  ]", op.value());
         break;
     case AddressMode::Byte16:
-        m_trace.appendff("[  {:02x}    ]", op.value());
+        traceff("[  {:02x}    ]", op.value());
         break;
     case AddressMode::Byte24:
-        m_trace.appendff("[{:02x}      ]", op.value());
+        traceff("[{:02x}      ]", op.value());
         break;
     }
 
@@ -1025,34 +1014,34 @@ void Interpreter::write_dst(Operand const& op, u32 value)
 
     switch (op.address_mode) {
     case AddressMode::DWord:
-        m_trace.appendff(" => [{:08x}]", value);
+        traceff(" => [{:08x}]", value);
         break;
     case AddressMode::Word0:
-        m_trace.appendff(" => [    {:04x}]", value);
+        traceff(" => [    {:04x}]", value);
         value = (op.full_value & 0xFFFF0000) | value;
         break;
     case AddressMode::Word8:
-        m_trace.appendff(" => [  {:04x}  ]", value);
+        traceff(" => [  {:04x}  ]", value);
         value = (op.full_value & 0xFF0000FF) | (value << 8);
         break;
     case AddressMode::Word16:
-        m_trace.appendff(" => [{:04x}    ]", value);
+        traceff(" => [{:04x}    ]", value);
         value = (op.full_value & 0x0000FFFF) | (value << 16);
         break;
     case AddressMode::Byte0:
-        m_trace.appendff(" => [      {:02x}]", value);
+        traceff(" => [      {:02x}]", value);
         value = (op.full_value & 0xFFFFFF00) | value;
         break;
     case AddressMode::Byte8:
-        m_trace.appendff(" => [    {:02x}  ]", value);
+        traceff(" => [    {:02x}  ]", value);
         value = (op.full_value & 0xFFFF00FF) | (value << 8);
         break;
     case AddressMode::Byte16:
-        m_trace.appendff(" => [  {:02x}    ]", value);
+        traceff(" => [  {:02x}    ]", value);
         value = (op.full_value & 0xFF00FFFF) | (value << 16);
         break;
     case AddressMode::Byte24:
-        m_trace.appendff(" => [{:02x}      ]", value);
+        traceff(" => [{:02x}      ]", value);
         value = (op.full_value & 0x00FFFFFF) | (value << 24);
         break;
     }
@@ -1148,13 +1137,25 @@ void Interpreter::write_dst(Operand const& op, u32 value)
     }
 }
 
+void Interpreter::trace(StringView msg)
+{
+    if (trace_enabled()) {
+        m_trace.appendff(msg);
+    }
+}
+
 void Interpreter::flush_trace()
 {
     // TODO: Put logging behind kernel parameter or something? Depends on if its a lot of stuff...
-    if (m_trace.length() != 0) {
-        dbgln_if(AMD_GRAPHICS_DEBUG, "Atom: [{}] {}", m_debug_depth, m_trace.string_view());
+    if (m_trace.length() != 0 && trace_enabled()) {
+        dbgln("Atom: [{}] {}", m_debug_depth, m_trace.string_view());
         m_trace.clear();
     }
+}
+
+bool Interpreter::trace_enabled() const
+{
+    return m_gpu.m_bios_debug;
 }
 
 }
