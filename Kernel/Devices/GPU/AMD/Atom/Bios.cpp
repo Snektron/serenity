@@ -145,32 +145,30 @@ ErrorOr<void> Bios::index_iio()
     return {};
 }
 
-ErrorOr<NonnullOwnPtr<KString>> Bios::name() const
+void Bios::dump_version(AMDNativeGraphicsAdapter& gpu) const
 {
-    auto const rom = this->must_read_from_bios<ROM>(0);
+    auto const* const rom = this->must_read_from_bios<ROM>(0);
     if (rom->number_of_strings == 0) {
-        return KString::try_create("(unknown)"sv);
+        return;
     }
 
-    u8* name_ptr = this->m_bios->data() + rom->vbios_name_offset;
-
-    // Skip atombios strings
-    for (u16 i = 0; i < rom->number_of_strings; ++i) {
-        while (*name_ptr != 0)
-            ++name_ptr;
-        ++name_ptr;
+    // Bios version is the first string, bios name is past the last string.
+    char* string_ptr = reinterpret_cast<char*>(this->m_bios->data() + rom->vbios_name_offset);
+    auto const version = StringView(string_ptr, strlen(string_ptr));
+    string_ptr += version.length() + 1;
+    for (u16 i = 1; i < rom->number_of_strings; ++i) {
+        string_ptr += strlen(string_ptr) + 1;
     }
-    name_ptr += 2; // Skip \r\n
-
-    size_t len = 0;
-    while (name_ptr[len] && len < 64)
-        ++len;
-
-    // Trim up whitespace
-    while (len > 0 && name_ptr[len - 1] <= ' ')
+    // Skip whitespace
+    while (*string_ptr <= ' ') {
+        ++string_ptr;
+    }
+    size_t len = strlen(string_ptr);
+    while (len > 0 && string_ptr[len] <= ' ') {
         --len;
-
-    return KString::try_create(StringView(name_ptr, len));
+    }
+    dmesgln_pci(gpu, "VBIOS: {}", StringView(string_ptr, len));
+    dmesgln_pci(gpu, "VBIOS: version {}", version);
 }
 
 u16 Bios::datatable(u16 index) const

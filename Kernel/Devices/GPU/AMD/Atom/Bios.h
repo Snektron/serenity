@@ -29,7 +29,7 @@ class Bios final {
 public:
     static ErrorOr<NonnullOwnPtr<Bios>> try_create(AMDNativeGraphicsAdapter& adapter);
 
-    ErrorOr<NonnullOwnPtr<KString>> name() const;
+    void dump_version(AMDNativeGraphicsAdapter& adapter) const;
 
     u16 datatable(u16 index) const;
 

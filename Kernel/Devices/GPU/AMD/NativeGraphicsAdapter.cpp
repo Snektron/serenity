@@ -64,11 +64,9 @@ ErrorOr<void> AMDNativeGraphicsAdapter::initialize()
     dmesgln_pci(*this, "MMIO @ {}, space size is 0x{:x} bytes", mmio_addr, mmio_size);
 
     m_mmio_registers = TRY(Memory::map_typed<u32 volatile>(mmio_addr, mmio_size, Memory::Region::Access::ReadWrite));
+
     m_bios = TRY(Graphics::AMD::Atom::Bios::try_create(*this));
-
-    auto const name = TRY(m_bios->name());
-    dmesgln_pci(*this, "VBIOS is {}", name);
-
+    m_bios->dump_version(*this);
     TRY(m_bios->asic_init(*this));
 
     return Error::from_errno(ENODEV);
