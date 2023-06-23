@@ -27,9 +27,9 @@ namespace Kernel::Graphics::AMD::Atom {
 // Atom definitions from atom.h and atomfirmware.h
 class Bios final {
 public:
-    static ErrorOr<NonnullOwnPtr<Bios>> try_create(AMDNativeGraphicsAdapter& adapter);
+    static ErrorOr<NonnullOwnPtr<Bios>> try_create(AMDNativeGraphicsAdapter& gpu);
 
-    void dump_version(AMDNativeGraphicsAdapter& adapter) const;
+    void dump_version(AMDNativeGraphicsAdapter& gpu) const;
 
     u16 datatable(u16 index) const;
 
@@ -49,7 +49,7 @@ private:
     explicit Bios(NonnullOwnPtr<KBuffer>&& bios);
 
     static ErrorOr<NonnullOwnPtr<Bios>> try_create_from_kbuffer(NonnullOwnPtr<KBuffer>&& bios_buffer);
-    static ErrorOr<NonnullOwnPtr<Bios>> try_create_from_expansion_rom(AMDNativeGraphicsAdapter& adapter);
+    static ErrorOr<NonnullOwnPtr<Bios>> try_create_from_expansion_rom(AMDNativeGraphicsAdapter& gpu);
 
     template<typename T>
     ErrorOr<T const*> try_read_from_bios(u16 offset) const
@@ -80,6 +80,10 @@ private:
 
     Spinlock<LockRank::None> m_execution_lock;
     NonnullOwnPtr<KBuffer> m_bios;
+    ROM const* m_rom;
+    CommandTable const* m_cmd_table;
+    DataTable const* m_data_table;
+
     Array<u16, MaxIIOPrograms> m_iio;
 };
 
