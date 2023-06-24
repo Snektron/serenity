@@ -20,14 +20,12 @@ class AMDDevice;
 namespace Atom {
 
 class Bios;
-class Interpreter;
 
 };
 
 class AMDNativeGraphicsAdapter final
     : public GenericGraphicsAdapter
     , public PCI::Device {
-    friend class Atom::Interpreter;
 
 public:
     static ErrorOr<bool> probe(PCI::DeviceIdentifier const&);

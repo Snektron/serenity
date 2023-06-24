@@ -28,6 +28,7 @@ ErrorOr<NonnullOwnPtr<Bios>> Bios::try_create(AMDNativeGraphicsAdapter& gpu)
 
 Bios::Bios(NonnullOwnPtr<KBuffer>&& bios)
     : m_bios(move(bios))
+    , m_atom_debug(kernel_command_line().enable_atombios_debug())
 {
 }
 

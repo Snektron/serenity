@@ -1146,7 +1146,6 @@ void Interpreter::trace(StringView msg)
 
 void Interpreter::flush_trace()
 {
-    // TODO: Put logging behind kernel parameter or something? Depends on if its a lot of stuff...
     if (m_trace.length() != 0 && trace_enabled()) {
         dbgln("Atom: [{}] {}", m_debug_depth, m_trace.string_view());
         m_trace.clear();
@@ -1155,7 +1154,7 @@ void Interpreter::flush_trace()
 
 bool Interpreter::trace_enabled() const
 {
-    return m_gpu.m_bios_debug;
+    return m_gpu.bios().atom_debug_enabled();
 }
 
 }

@@ -45,6 +45,8 @@ public:
 
     ErrorOr<void> asic_init(AMDNativeGraphicsAdapter& gpu) const;
 
+    bool atom_debug_enabled() const { return m_atom_debug; }
+
 private:
     explicit Bios(NonnullOwnPtr<KBuffer>&& bios);
 
@@ -80,6 +82,8 @@ private:
 
     Spinlock<LockRank::None> m_execution_lock;
     NonnullOwnPtr<KBuffer> m_bios;
+    bool m_atom_debug;
+
     ROM const* m_rom;
     CommandTable const* m_cmd_table;
     DataTable const* m_data_table;

@@ -61,8 +61,6 @@ ErrorOr<void> AMDNativeGraphicsAdapter::initialize()
     m_device = TRY(adopt_nonnull_own_or_enomem(new (nothrow) VI::VIDevice(*this)));
     TRY(m_device->map_mmio());
 
-    m_bios_debug = kernel_command_line().enable_atombios_debug();
-
     m_bios = TRY(Atom::Bios::try_create(*this));
     m_bios->dump_version(*this);
     TRY(m_bios->asic_init(*this));
