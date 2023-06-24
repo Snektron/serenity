@@ -27,9 +27,9 @@ namespace Kernel::Graphics::AMD::Atom {
 // Atom definitions from atom.h and atomfirmware.h
 class Bios final {
 public:
-    static ErrorOr<NonnullOwnPtr<Bios>> try_create(AMDNativeGraphicsAdapter& gpu);
+    static ErrorOr<NonnullOwnPtr<Bios>> try_create(AMDNativeGraphicsAdapter& adapter);
 
-    void dump_version(AMDNativeGraphicsAdapter& gpu) const;
+    void dump_version(AMDNativeGraphicsAdapter& adapter) const;
 
     u16 datatable(u16 index) const;
 
@@ -41,9 +41,9 @@ public:
 
     u16 iio_program(u16 index) const { return m_iio[index]; }
 
-    ErrorOr<void> invoke(AMDNativeGraphicsAdapter& gpu, Command cmd, Span<u32> parameters) const;
+    ErrorOr<void> invoke(AMDNativeGraphicsAdapter& adapter, Command cmd, Span<u32> parameters) const;
 
-    ErrorOr<void> asic_init(AMDNativeGraphicsAdapter& gpu) const;
+    ErrorOr<void> asic_init(AMDNativeGraphicsAdapter& adapter) const;
 
     bool atom_debug_enabled() const { return m_atom_debug; }
 
@@ -51,7 +51,7 @@ private:
     explicit Bios(NonnullOwnPtr<KBuffer>&& bios);
 
     static ErrorOr<NonnullOwnPtr<Bios>> try_create_from_kbuffer(NonnullOwnPtr<KBuffer>&& bios_buffer);
-    static ErrorOr<NonnullOwnPtr<Bios>> try_create_from_expansion_rom(AMDNativeGraphicsAdapter& gpu);
+    static ErrorOr<NonnullOwnPtr<Bios>> try_create_from_expansion_rom(AMDNativeGraphicsAdapter& adapter);
 
     template<typename T>
     ErrorOr<T const*> try_read_from_bios(u16 offset) const

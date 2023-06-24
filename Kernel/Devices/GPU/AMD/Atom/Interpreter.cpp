@@ -10,6 +10,7 @@
 #include <AK/StdLibExtras.h>
 #include <Kernel/Devices/GPU/AMD/Atom/Bios.h>
 #include <Kernel/Devices/GPU/AMD/Atom/Interpreter.h>
+#include <Kernel/Devices/GPU/AMD/Device.h>
 #include <Kernel/Devices/GPU/AMD/NativeGraphicsAdapter.h>
 #include <Kernel/Tasks/Process.h>
 
@@ -239,8 +240,8 @@ u32 Operand::value() const
     }
 }
 
-Interpreter::Interpreter(Context& ctx, AMDNativeGraphicsAdapter& gpu, CommandDescriptor cmd_desc, Span<u32> ps, Span<u32> ws, u16 debug_depth)
-    : m_gpu(gpu)
+Interpreter::Interpreter(Context& ctx, AMDNativeGraphicsAdapter& adapter, CommandDescriptor cmd_desc, Span<u32> ps, Span<u32> ws, u16 debug_depth)
+    : m_adapter(adapter)
     , m_ctx(ctx)
     , m_cmd_desc(cmd_desc)
     , m_parameter_space(ps)
@@ -249,17 +250,17 @@ Interpreter::Interpreter(Context& ctx, AMDNativeGraphicsAdapter& gpu, CommandDes
 {
 }
 
-ErrorOr<void> Interpreter::execute(AMDNativeGraphicsAdapter& gpu, Command cmd, Span<u32> parameters)
+ErrorOr<void> Interpreter::execute(AMDNativeGraphicsAdapter& adapter, Command cmd, Span<u32> parameters)
 {
     Context ctx;
-    return execute_recursive(ctx, gpu, cmd, parameters, 0);
+    return execute_recursive(ctx, adapter, cmd, parameters, 0);
 }
 
-ErrorOr<void> Interpreter::execute_recursive(Context& ctx, AMDNativeGraphicsAdapter& gpu, Command cmd, Span<u32> parameters, u16 debug_depth)
+ErrorOr<void> Interpreter::execute_recursive(Context& ctx, AMDNativeGraphicsAdapter& adapter, Command cmd, Span<u32> parameters, u16 debug_depth)
 {
-    auto const desc = TRY(gpu.bios().command(cmd));
+    auto const desc = TRY(adapter.bios().command(cmd));
     auto work_space = TRY(FixedArray<u32>::create(desc.work_space_size / sizeof(u32)));
-    auto interp = Interpreter(ctx, gpu, desc, parameters, work_space.span(), debug_depth);
+    auto interp = Interpreter(ctx, adapter, desc, parameters, work_space.span(), debug_depth);
 
     interp.traceff("--- Executing command {:04x} @ {:04x} (len={:04x}, ps={:02x}, ws={:02x})", to_underlying(cmd), desc.base, desc.size, desc.parameter_space_size, desc.work_space_size);
     interp.flush_trace();
@@ -278,14 +279,14 @@ ErrorOr<void> Interpreter::execute_recursive(Context& ctx, AMDNativeGraphicsAdap
 
 ErrorOr<u32> Interpreter::execute_iio(u32 program, u32 index, u32 data)
 {
-    u16 iio_pc = m_gpu.bios().iio_program(program);
+    u16 iio_pc = m_adapter.bios().iio_program(program);
     if (iio_pc == 0) {
-        dmesgln_pci(m_gpu, "Atom: invalid IIO program {}", program);
+        dmesgln_pci(m_adapter, "Atom: invalid IIO program {}", program);
         return Error::from_errno(EIO);
     }
 
     auto const iio8 = [&, this]() -> u8 {
-        return m_gpu.bios().read8(iio_pc++);
+        return m_adapter.bios().read8(iio_pc++);
     };
 
     auto const iio16 = [&]() -> u16 {
@@ -300,12 +301,12 @@ ErrorOr<u32> Interpreter::execute_iio(u32 program, u32 index, u32 data)
             break;
         case IndirectIO::Read: {
             u16 index = iio16();
-            temp = m_gpu.read_register(index);
+            temp = m_adapter.device().read_register(index);
             break;
         }
         case IndirectIO::Write: {
             u16 index = iio16();
-            m_gpu.write_register(index, temp);
+            m_adapter.device().write_register(index, temp);
             break;
         }
         case IndirectIO::Clear:
@@ -342,7 +343,7 @@ ErrorOr<u32> Interpreter::execute_iio(u32 program, u32 index, u32 data)
             return temp;
         case IndirectIO::Start:
         default:
-            dmesgln_pci(m_gpu, "Atom: invalid IIO opcode {:02x}", op);
+            dmesgln_pci(m_adapter, "Atom: invalid IIO opcode {:02x}", op);
             return Error::from_errno(EIO);
         }
     }
@@ -358,7 +359,7 @@ ErrorOr<bool> Interpreter::next()
 
     switch (desc.opcode) {
     case OpCode::Invalid:
-        dmesgln_pci(m_gpu, "Atom: Invalid instruction {:02x} at {:04x}+{:04x}", inst, m_cmd_desc.base, m_pc);
+        dmesgln_pci(m_adapter, "Atom: Invalid instruction {:02x} at {:04x}+{:04x}", inst, m_cmd_desc.base, m_pc);
         return Error::from_errno(EIO);
     case OpCode::Move: {
         u8 attr = read8();
@@ -515,14 +516,14 @@ ErrorOr<bool> Interpreter::next()
             case CaseEnd: {
                 // 2 case ends marks end of switch
                 if (read8() != CaseEnd) {
-                    dmesgln_pci(m_gpu, "Atom: Invalid case end");
+                    dmesgln_pci(m_adapter, "Atom: Invalid case end");
                     return Error::from_errno(EIO);
                 }
                 stop = true;
                 break;
             }
             default:
-                dmesgln_pci(m_gpu, "Atom: Invalid case");
+                dmesgln_pci(m_adapter, "Atom: Invalid case");
                 return Error::from_errno(EIO);
             }
         }
@@ -587,7 +588,7 @@ ErrorOr<bool> Interpreter::next()
         }
 
         if (block_result.was_interrupted()) {
-            dmesgln_pci(m_gpu, "Atom warning: interrupted during sleep");
+            dmesgln_pci(m_adapter, "Atom warning: interrupted during sleep");
         }
 
         break;
@@ -598,7 +599,7 @@ ErrorOr<bool> Interpreter::next()
         auto const ps = m_parameter_space.slice(m_cmd_desc.parameter_space_size / sizeof(u32));
         traceff(" {:02x}", index);
         flush_trace();
-        TRY(execute_recursive(m_ctx, m_gpu, cmd, ps, m_debug_depth + 1));
+        TRY(execute_recursive(m_ctx, m_adapter, cmd, ps, m_debug_depth + 1));
         break;
     }
     case OpCode::Clear: {
@@ -628,7 +629,7 @@ ErrorOr<bool> Interpreter::next()
         break;
     }
     case OpCode::Beep: {
-        dmesgln_pci(m_gpu, "beep!");
+        dmesgln_pci(m_adapter, "beep!");
         break;
     }
     case OpCode::SetDataBlock: {
@@ -642,7 +643,7 @@ ErrorOr<bool> Interpreter::next()
             m_ctx.data_block = m_cmd_desc.base;
             break;
         default:
-            m_ctx.data_block = m_gpu.bios().datatable(index);
+            m_ctx.data_block = m_adapter.bios().datatable(index);
             break;
         }
         traceff(" base:{:02x}", m_ctx.data_block);
@@ -715,7 +716,7 @@ ErrorOr<bool> Interpreter::next()
     case OpCode::Repeat:
     case OpCode::SaveReg:
     case OpCode::RestoreReg:
-        dmesgln_pci(m_gpu, "Atom: Unimplemented opcode: {}", opcode_name_table[to_underlying(desc.opcode)]);
+        dmesgln_pci(m_adapter, "Atom: Unimplemented opcode: {}", opcode_name_table[to_underlying(desc.opcode)]);
         return Error::from_errno(ENOTIMPL);
     }
 
@@ -724,7 +725,7 @@ ErrorOr<bool> Interpreter::next()
 
 u8 Interpreter::read8()
 {
-    return m_gpu.bios().read8(m_cmd_desc.base + m_pc++);
+    return m_adapter.bios().read8(m_cmd_desc.base + m_pc++);
 }
 
 u16 Interpreter::read16()
@@ -850,14 +851,14 @@ Operand Interpreter::read_src(u8 attr)
         traceff(" reg[{:04x}]", index);
         switch (m_ctx.io_mode) {
         case IOMode::MemoryMapped:
-            value = m_gpu.read_register(index);
+            value = m_adapter.device().read_register(index);
             break;
         case IOMode::PCI:
-            dmesgln_pci(m_gpu, "Atom: Reading from PCI registers not implemented");
+            dmesgln_pci(m_adapter, "Atom: Reading from PCI registers not implemented");
             VERIFY_NOT_REACHED();
             break;
         case IOMode::SysIO:
-            dmesgln_pci(m_gpu, "Atom: Reading from SysIO registers not implemented");
+            dmesgln_pci(m_adapter, "Atom: Reading from SysIO registers not implemented");
             VERIFY_NOT_REACHED();
             break;
         default:
@@ -922,7 +923,7 @@ Operand Interpreter::read_src(u8 attr)
     case Location::ID: {
         u16 index = read16();
         traceff(" id[{:04x}]", index);
-        value = m_gpu.bios().read32(index + m_ctx.data_block);
+        value = m_adapter.bios().read32(index + m_ctx.data_block);
         break;
     }
     case Location::FrameBuffer: {
@@ -940,7 +941,7 @@ Operand Interpreter::read_src(u8 attr)
     case Location::PhaseLockedLoop: {
         u8 index = read8();
         traceff(" pll[{:02x}]", index);
-        dmesgln_pci(m_gpu, "Atom: reading from unimplemented pll");
+        dmesgln_pci(m_adapter, "Atom: reading from unimplemented pll");
         // TODO: Error?
         VERIFY_NOT_REACHED();
         break;
@@ -948,7 +949,7 @@ Operand Interpreter::read_src(u8 attr)
     case Location::MemController: {
         u8 index = read8();
         traceff(" mc[{:02x}]", index);
-        dmesgln_pci(m_gpu, "Atom: reading from unimplemented mc");
+        dmesgln_pci(m_adapter, "Atom: reading from unimplemented mc");
         // TODO: Error?
         VERIFY_NOT_REACHED();
         break;
@@ -1054,17 +1055,17 @@ void Interpreter::write_dst(Operand const& op, u32 value)
         switch (m_ctx.io_mode) {
         case IOMode::MemoryMapped:
             if (index == 0) {
-                m_gpu.write_register(index, value << 2);
+                m_adapter.device().write_register(index, value << 2);
             } else {
-                m_gpu.write_register(index, value);
+                m_adapter.device().write_register(index, value);
             }
             break;
         case IOMode::PCI:
-            dmesgln_pci(m_gpu, "Atom: PCI registers are not implemented");
+            dmesgln_pci(m_adapter, "Atom: PCI registers are not implemented");
             VERIFY_NOT_REACHED();
             break;
         case IOMode::SysIO:
-            dmesgln_pci(m_gpu, "Atom SysIO registers are not implemented");
+            dmesgln_pci(m_adapter, "Atom SysIO registers are not implemented");
             VERIFY_NOT_REACHED();
             break;
         case IOMode::IIO:
@@ -1120,14 +1121,14 @@ void Interpreter::write_dst(Operand const& op, u32 value)
     }
     case Location::PhaseLockedLoop: {
         u8 index = read8();
-        dmesgln_pci(m_gpu, "Atom: writing to unimplemented pll");
+        dmesgln_pci(m_adapter, "Atom: writing to unimplemented pll");
         (void)index;
         break;
     }
     case Location::MemController: {
         u8 index = read8();
         (void)index;
-        dmesgln_pci(m_gpu, "Atom: writing to unimplemented mc");
+        dmesgln_pci(m_adapter, "Atom: writing to unimplemented mc");
         break;
     }
     case Location::ID:
@@ -1154,7 +1155,7 @@ void Interpreter::flush_trace()
 
 bool Interpreter::trace_enabled() const
 {
-    return m_gpu.bios().atom_debug_enabled();
+    return m_adapter.bios().atom_debug_enabled();
 }
 
 }

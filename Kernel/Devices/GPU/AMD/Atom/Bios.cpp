@@ -14,12 +14,12 @@
 
 namespace Kernel::Graphics::AMD::Atom {
 
-ErrorOr<NonnullOwnPtr<Bios>> Bios::try_create(AMDNativeGraphicsAdapter& gpu)
+ErrorOr<NonnullOwnPtr<Bios>> Bios::try_create(AMDNativeGraphicsAdapter& adapter)
 {
-    if (auto bios = try_create_from_expansion_rom(gpu); bios.is_error()) {
+    if (auto bios = try_create_from_expansion_rom(adapter); bios.is_error()) {
         dbgln_if(AMD_GRAPHICS_DEBUG, "Failed to read VBIOS from PCI expansion ROM: {}", bios.error());
     } else {
-        dmesgln_pci(gpu, "Loaded VBIOS from PCI expansion ROM");
+        dmesgln_pci(adapter, "Loaded VBIOS from PCI expansion ROM");
         return bios.release_value();
     }
 
@@ -46,26 +46,26 @@ ErrorOr<NonnullOwnPtr<Bios>> Bios::try_create_from_kbuffer(NonnullOwnPtr<KBuffer
     return bios;
 }
 
-ErrorOr<NonnullOwnPtr<Bios>> Bios::try_create_from_expansion_rom(AMDNativeGraphicsAdapter& gpu)
+ErrorOr<NonnullOwnPtr<Bios>> Bios::try_create_from_expansion_rom(AMDNativeGraphicsAdapter& adapter)
 {
-    const size_t size = PCI::get_expansion_rom_space_size(gpu.device_identifier());
+    const size_t size = PCI::get_expansion_rom_space_size(adapter.device_identifier());
     if (size == 0)
         return Error::from_errno(ENXIO);
 
-    SpinlockLocker locker(gpu.device_identifier().operation_lock());
+    SpinlockLocker locker(adapter.device_identifier().operation_lock());
 
     // TODO: There might be some conflicts here with the DeviceExpansionROM sysfs component.
     // Its probably fine for now because this just maps and unmaps it really quickly at a
     // moment that that driver is not mapping it.
-    auto expansion_rom_ptr = PCI::read32_locked(gpu.device_identifier(), PCI::RegisterOffset::EXPANSION_ROM_POINTER);
+    auto expansion_rom_ptr = PCI::read32_locked(adapter.device_identifier(), PCI::RegisterOffset::EXPANSION_ROM_POINTER);
     if (expansion_rom_ptr == 0)
         return Error::from_errno(ENXIO);
 
     ScopeGuard unmap_rom_on_return([&] {
-        PCI::write32_locked(gpu.device_identifier(), PCI::RegisterOffset::EXPANSION_ROM_POINTER, expansion_rom_ptr);
+        PCI::write32_locked(adapter.device_identifier(), PCI::RegisterOffset::EXPANSION_ROM_POINTER, expansion_rom_ptr);
     });
     // OR with 1 to map the expansion rom pointer into memory
-    PCI::write32_locked(gpu.device_identifier(), PCI::RegisterOffset::EXPANSION_ROM_POINTER, expansion_rom_ptr | 1);
+    PCI::write32_locked(adapter.device_identifier(), PCI::RegisterOffset::EXPANSION_ROM_POINTER, expansion_rom_ptr | 1);
 
     auto bios_mapping = TRY(Memory::map_typed<u8>(PhysicalAddress(expansion_rom_ptr), size, Memory::Region::Access::Read));
     auto bios_buffer = TRY(KBuffer::try_create_with_bytes("AMD GPU VBIOS"sv, ReadonlyBytes(bios_mapping.ptr(), size)));
@@ -147,7 +147,7 @@ ErrorOr<void> Bios::index_iio()
     return {};
 }
 
-void Bios::dump_version(AMDNativeGraphicsAdapter& gpu) const
+void Bios::dump_version(AMDNativeGraphicsAdapter& adapter) const
 {
     auto const* const rom = this->must_read_from_bios<ROM>(0);
     if (rom->number_of_strings == 0) {
@@ -169,8 +169,8 @@ void Bios::dump_version(AMDNativeGraphicsAdapter& gpu) const
     while (len > 0 && string_ptr[len] <= ' ') {
         --len;
     }
-    dmesgln_pci(gpu, "VBIOS: {}", StringView(string_ptr, len));
-    dmesgln_pci(gpu, "VBIOS: version {}", version);
+    dmesgln_pci(adapter, "VBIOS: {}", StringView(string_ptr, len));
+    dmesgln_pci(adapter, "VBIOS: version {}", version);
 }
 
 u16 Bios::datatable(u16 index) const
@@ -205,13 +205,13 @@ u32 Bios::read32(u16 offset) const
     return read16(offset) | (read16(offset + 2) << 16);
 }
 
-ErrorOr<void> Bios::invoke(AMDNativeGraphicsAdapter& gpu, Command cmd, Span<u32> parameters) const
+ErrorOr<void> Bios::invoke(AMDNativeGraphicsAdapter& adapter, Command cmd, Span<u32> parameters) const
 {
-    VERIFY(&gpu.bios() == this);
-    return Graphics::AMD::Atom::Interpreter::execute(gpu, cmd, parameters);
+    VERIFY(&adapter.bios() == this);
+    return Graphics::AMD::Atom::Interpreter::execute(adapter, cmd, parameters);
 }
 
-ErrorOr<void> Bios::asic_init(AMDNativeGraphicsAdapter& gpu) const
+ErrorOr<void> Bios::asic_init(AMDNativeGraphicsAdapter& adapter) const
 {
     auto const* const data_table = reinterpret_cast<DataTableV11 const*>(m_data_table);
     auto const firmware_info = TRY(this->try_read_from_bios<FirmwareInfoV22>(data_table->firmware_info));
@@ -223,9 +223,9 @@ ErrorOr<void> Bios::asic_init(AMDNativeGraphicsAdapter& gpu) const
     parameters.sclk_freq = firmware_info->default_sclk_freq;
     parameters.mclk_freq = firmware_info->default_mclk_freq;
 
-    dmesgln_pci(gpu, "Initializing AMD GPU with sclk={}KHz, mclk={}KHz", parameters.sclk_freq * 10, parameters.mclk_freq * 10);
+    dmesgln_pci(adapter, "Initializing AMD GPU with sclk={}KHz, mclk={}KHz", parameters.sclk_freq * 10, parameters.mclk_freq * 10);
 
-    return invoke(gpu, Command::AsicInit, to_parameter_space(parameters));
+    return invoke(adapter, Command::AsicInit, to_parameter_space(parameters));
 }
 
 }

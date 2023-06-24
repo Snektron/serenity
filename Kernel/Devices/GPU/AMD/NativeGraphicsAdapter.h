@@ -35,14 +35,7 @@ public:
     virtual StringView device_name() const override { return "AMDNativeGraphicsAdapter"sv; }
 
     Atom::Bios& bios() const { return *m_bios; }
-
-    // Write a to an AMD GPU register.
-    // - reg: Register dword index.
-    // - data: Value to write.
-    void write_register(u32 reg, u32 data);
-    // Read from an AMD GPU register.
-    // - reg: Register dword index.
-    u32 read_register(u32 reg);
+    AMDDevice& device() const { return *m_device; };
 
 private:
     explicit AMDNativeGraphicsAdapter(PCI::DeviceIdentifier const&);

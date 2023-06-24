@@ -74,7 +74,7 @@ struct Operand {
 
 class Interpreter {
 public:
-    static ErrorOr<void> execute(AMDNativeGraphicsAdapter& gpu, Command cmd, Span<u32> parameters);
+    static ErrorOr<void> execute(AMDNativeGraphicsAdapter& adapter, Command cmd, Span<u32> parameters);
 
 private:
     // Global context that is shared between calls to different tables
@@ -91,9 +91,9 @@ private:
         u16 io_attr { 0 };
     };
 
-    static ErrorOr<void> execute_recursive(Context& ctx, AMDNativeGraphicsAdapter& gpu, Command cmd, Span<u32> parameters, u16 debug_depth);
+    static ErrorOr<void> execute_recursive(Context& ctx, AMDNativeGraphicsAdapter& adapter, Command cmd, Span<u32> parameters, u16 debug_depth);
 
-    explicit Interpreter(Context& ctx, AMDNativeGraphicsAdapter& gpu, CommandDescriptor cmd_desc, Span<u32> ps, Span<u32> ws, u16 debug_depth);
+    explicit Interpreter(Context& ctx, AMDNativeGraphicsAdapter& adapter, CommandDescriptor cmd_desc, Span<u32> ps, Span<u32> ws, u16 debug_depth);
 
     ErrorOr<u32> execute_iio(u32 program, u32 index, u32 data);
 
@@ -121,7 +121,7 @@ private:
     void flush_trace();
     bool trace_enabled() const;
 
-    AMDNativeGraphicsAdapter& m_gpu;
+    AMDNativeGraphicsAdapter& m_adapter;
     Context& m_ctx;
     CommandDescriptor m_cmd_desc;
 

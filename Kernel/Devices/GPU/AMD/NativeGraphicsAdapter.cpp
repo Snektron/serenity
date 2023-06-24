@@ -69,14 +69,4 @@ ErrorOr<void> AMDNativeGraphicsAdapter::initialize()
     return Error::from_errno(ENODEV);
 }
 
-void AMDNativeGraphicsAdapter::write_register(u32 reg, u32 data)
-{
-    m_device->write_register(reg, data);
-}
-
-u32 AMDNativeGraphicsAdapter::read_register(u32 reg)
-{
-    return m_device->read_register(reg);
-}
-
 }
