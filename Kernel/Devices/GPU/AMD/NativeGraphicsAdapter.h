@@ -15,6 +15,8 @@
 
 namespace Kernel::Graphics::AMD {
 
+class AMDDevice;
+
 namespace Atom {
 
 class Bios;
@@ -49,10 +51,9 @@ private:
 
     ErrorOr<void> initialize();
 
-    Spinlock<LockRank::None> m_mmio_register_lock;
-    Memory::TypedMapping<u32 volatile> m_mmio_registers;
+    OwnPtr<AMDDevice> m_device;
+    OwnPtr<Atom::Bios> m_bios;
 
     bool m_bios_debug;
-    OwnPtr<Atom::Bios> m_bios;
 };
 }

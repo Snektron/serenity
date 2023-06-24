@@ -73,7 +73,9 @@ set(KERNEL_SOURCES
     Devices/Generic/ZeroDevice.cpp
     Devices/GPU/AMD/Atom/Bios.cpp
     Devices/GPU/AMD/Atom/Interpreter.cpp
+    Devices/GPU/AMD/Device.cpp
     Devices/GPU/AMD/NativeGraphicsAdapter.cpp
+    Devices/GPU/AMD/VI/Device.cpp
     Devices/GPU/Bochs/GraphicsAdapter.cpp
     Devices/GPU/Bochs/QEMUDisplayConnector.cpp
     Devices/GPU/Console/BootFramebufferConsole.cpp

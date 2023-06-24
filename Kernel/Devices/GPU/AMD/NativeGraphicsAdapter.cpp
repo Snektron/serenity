@@ -9,10 +9,10 @@
 #include <Kernel/Boot/CommandLine.h>
 #include <Kernel/Bus/PCI/API.h>
 #include <Kernel/Bus/PCI/IDs.h>
-#include <Kernel/Devices/GPU/AMD/Arch/VI/Registers.h>
 #include <Kernel/Devices/GPU/AMD/Atom/Bios.h>
 #include <Kernel/Devices/GPU/AMD/Atom/Interpreter.h>
 #include <Kernel/Devices/GPU/AMD/NativeGraphicsAdapter.h>
+#include <Kernel/Devices/GPU/AMD/VI/Device.h>
 #include <Kernel/Memory/PhysicalAddress.h>
 
 namespace Kernel::Graphics::AMD {
@@ -58,56 +58,27 @@ ErrorOr<void> AMDNativeGraphicsAdapter::initialize()
     PCI::enable_io_space(device_identifier());
     PCI::enable_bus_mastering(device_identifier());
 
-    // Note: BAR5 is only from >= bonaire (GFX7)
-    auto const mmio_addr = PhysicalAddress(PCI::get_BAR5(device_identifier()) & PCI::bar_address_mask);
-    auto const mmio_size = PCI::get_BAR_space_size(device_identifier(), PCI::HeaderType0BaseRegister::BAR5);
-
-    dmesgln_pci(*this, "MMIO @ {}, space size is 0x{:x} bytes", mmio_addr, mmio_size);
-
-    m_mmio_registers = TRY(Memory::map_typed<u32 volatile>(mmio_addr, mmio_size, Memory::Region::Access::ReadWrite));
+    m_device = TRY(adopt_nonnull_own_or_enomem(new (nothrow) VI::VIDevice(*this)));
+    TRY(m_device->map_mmio());
 
     m_bios_debug = kernel_command_line().enable_atombios_debug();
 
     m_bios = TRY(Atom::Bios::try_create(*this));
     m_bios->dump_version(*this);
     TRY(m_bios->asic_init(*this));
+    dmesgln_pci(*this, "GPU POSTed");
 
     return Error::from_errno(ENODEV);
 }
 
 void AMDNativeGraphicsAdapter::write_register(u32 reg, u32 data)
 {
-    auto const mmio = m_mmio_registers.ptr();
-    if (reg * sizeof(u32) < m_mmio_registers.length) {
-        mmio[reg] = data;
-    } else {
-        // Outside the mapped range, write via PCIe
-        // TODO: Abstract this to architecture-specific write function
-        // Note: PCIEIndex and PCIEData are supposed to be < m_mmio_registers.length
-        SpinlockLocker locker(m_mmio_register_lock);
-        mmio[to_underlying(VI::Registers::PCIEIndex)] = reg * sizeof(u32);
-        (void)mmio[to_underlying(VI::Registers::PCIEIndex)];
-        mmio[to_underlying(VI::Registers::PCIEData)] = data;
-        (void)mmio[to_underlying(VI::Registers::PCIEData)];
-    }
+    m_device->write_register(reg, data);
 }
 
 u32 AMDNativeGraphicsAdapter::read_register(u32 reg)
 {
-    auto const mmio = m_mmio_registers.ptr();
-    u32 data;
-    if (reg * sizeof(u32) < m_mmio_registers.length) {
-        data = mmio[reg];
-    } else {
-        // Outside the mapped range, write via PCIe
-        // TODO: Abstract this to architecture-specific read function
-        // Note: PCIEIndex and PCIEData are supposed to be < m_mmio_registers.length
-        SpinlockLocker locker(m_mmio_register_lock);
-        mmio[to_underlying(VI::Registers::PCIEIndex)] = reg * sizeof(u32);
-        (void)mmio[to_underlying(VI::Registers::PCIEIndex)];
-        data = mmio[to_underlying(VI::Registers::PCIEData)];
-    }
-    return data;
+    return m_device->read_register(reg);
 }
 
 }
