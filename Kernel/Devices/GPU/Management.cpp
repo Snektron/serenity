@@ -127,7 +127,7 @@ struct PCIGraphicsDriverInitializer {
 };
 
 static constexpr PCIGraphicsDriverInitializer s_initializers[] = {
-    { AMDNativeGraphicsAdapter::probe, AMDNativeGraphicsAdapter::create },
+    { Graphics::AMD::AMDNativeGraphicsAdapter::probe, Graphics::AMD::AMDNativeGraphicsAdapter::create },
     { IntelNativeGraphicsAdapter::probe, IntelNativeGraphicsAdapter::create },
     { BochsGraphicsAdapter::probe, BochsGraphicsAdapter::create },
     { VirtIOGraphicsAdapter::probe, VirtIOGraphicsAdapter::create },

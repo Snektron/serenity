@@ -13,7 +13,7 @@
 #include <Kernel/Boot/CommandLine.h>
 #include <Kernel/Devices/GPU/AMD/Atom/Definitions.h>
 
-namespace Kernel {
+namespace Kernel::Graphics::AMD {
 
 class AMDNativeGraphicsAdapter;
 

@@ -16,7 +16,7 @@
 #include <Kernel/Library/KBuffer.h>
 #include <Kernel/Library/KString.h>
 
-namespace Kernel {
+namespace Kernel::Graphics::AMD {
 
 class AMDNativeGraphicsAdapter;
 

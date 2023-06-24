@@ -13,9 +13,9 @@
 #include <Kernel/Locking/Spinlock.h>
 #include <Kernel/Memory/TypedMapping.h>
 
-namespace Kernel {
+namespace Kernel::Graphics::AMD {
 
-namespace Graphics::AMD::Atom {
+namespace Atom {
 
 class Bios;
 class Interpreter;
@@ -25,7 +25,7 @@ class Interpreter;
 class AMDNativeGraphicsAdapter final
     : public GenericGraphicsAdapter
     , public PCI::Device {
-    friend class Graphics::AMD::Atom::Interpreter;
+    friend class Atom::Interpreter;
 
 public:
     static ErrorOr<bool> probe(PCI::DeviceIdentifier const&);
@@ -34,7 +34,7 @@ public:
     virtual ~AMDNativeGraphicsAdapter() = default;
     virtual StringView device_name() const override { return "AMDNativeGraphicsAdapter"sv; }
 
-    Graphics::AMD::Atom::Bios& bios() const { return *m_bios; }
+    Atom::Bios& bios() const { return *m_bios; }
 
     // Write a to an AMD GPU register.
     // - reg: Register dword index.
@@ -53,6 +53,6 @@ private:
     Memory::TypedMapping<u32 volatile> m_mmio_registers;
 
     bool m_bios_debug;
-    OwnPtr<Graphics::AMD::Atom::Bios> m_bios;
+    OwnPtr<Atom::Bios> m_bios;
 };
 }

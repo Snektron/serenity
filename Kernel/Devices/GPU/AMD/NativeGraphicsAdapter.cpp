@@ -15,7 +15,7 @@
 #include <Kernel/Devices/GPU/AMD/NativeGraphicsAdapter.h>
 #include <Kernel/Memory/PhysicalAddress.h>
 
-namespace Kernel {
+namespace Kernel::Graphics::AMD {
 
 static constexpr u16 supported_models[] {
     0x67df, // RX 580X
@@ -68,7 +68,7 @@ ErrorOr<void> AMDNativeGraphicsAdapter::initialize()
 
     m_bios_debug = kernel_command_line().enable_atombios_debug();
 
-    m_bios = TRY(Graphics::AMD::Atom::Bios::try_create(*this));
+    m_bios = TRY(Atom::Bios::try_create(*this));
     m_bios->dump_version(*this);
     TRY(m_bios->asic_init(*this));
 
@@ -85,10 +85,10 @@ void AMDNativeGraphicsAdapter::write_register(u32 reg, u32 data)
         // TODO: Abstract this to architecture-specific write function
         // Note: PCIEIndex and PCIEData are supposed to be < m_mmio_registers.length
         SpinlockLocker locker(m_mmio_register_lock);
-        mmio[to_underlying(Graphics::AMD::VI::Registers::PCIEIndex)] = reg * sizeof(u32);
-        (void)mmio[to_underlying(Graphics::AMD::VI::Registers::PCIEIndex)];
-        mmio[to_underlying(Graphics::AMD::VI::Registers::PCIEData)] = data;
-        (void)mmio[to_underlying(Graphics::AMD::VI::Registers::PCIEData)];
+        mmio[to_underlying(VI::Registers::PCIEIndex)] = reg * sizeof(u32);
+        (void)mmio[to_underlying(VI::Registers::PCIEIndex)];
+        mmio[to_underlying(VI::Registers::PCIEData)] = data;
+        (void)mmio[to_underlying(VI::Registers::PCIEData)];
     }
 }
 
@@ -103,9 +103,9 @@ u32 AMDNativeGraphicsAdapter::read_register(u32 reg)
         // TODO: Abstract this to architecture-specific read function
         // Note: PCIEIndex and PCIEData are supposed to be < m_mmio_registers.length
         SpinlockLocker locker(m_mmio_register_lock);
-        mmio[to_underlying(Graphics::AMD::VI::Registers::PCIEIndex)] = reg * sizeof(u32);
-        (void)mmio[to_underlying(Graphics::AMD::VI::Registers::PCIEIndex)];
-        data = mmio[to_underlying(Graphics::AMD::VI::Registers::PCIEData)];
+        mmio[to_underlying(VI::Registers::PCIEIndex)] = reg * sizeof(u32);
+        (void)mmio[to_underlying(VI::Registers::PCIEIndex)];
+        data = mmio[to_underlying(VI::Registers::PCIEData)];
     }
     return data;
 }
